@@ -1,0 +1,337 @@
+------------------------------------------------
+-- ALPHA HUB | FINAL v12 (Fly mittlere Geschwindigkeit)
+------------------------------------------------
+
+-- SERVICES
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local TeleportService = game:GetService("TeleportService")
+local Stats = game:GetService("Stats")
+local Lighting = game:GetService("Lighting")
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+local gui = Instance.new("ScreenGui", player.PlayerGui)
+gui.Name = "AlphaHub"
+gui.ResetOnSpawn = false
+
+------------------------------------------------
+-- COLORS
+------------------------------------------------
+local C = {
+	PANEL = Color3.fromRGB(30,30,38),
+	BUTTON = Color3.fromRGB(45,45,55),
+	ACCENT = Color3.fromRGB(120,140,255),
+	TEXT = Color3.fromRGB(235,235,235),
+	ON = Color3.fromRGB(90,200,120)
+}
+
+------------------------------------------------
+-- UTILS
+------------------------------------------------
+local function corner(o,r)
+	Instance.new("UICorner",o).CornerRadius = UDim.new(0,r)
+end
+
+local function drag(frame,handle)
+	local d,s,p
+	handle.InputBegan:Connect(function(i)
+		if i.UserInputType==Enum.UserInputType.MouseButton1 then
+			d=true s=i.Position p=frame.Position
+		end
+	end)
+	UIS.InputChanged:Connect(function(i)
+		if d and i.UserInputType==Enum.UserInputType.MouseMovement then
+			local dx=i.Position-s
+			frame.Position=UDim2.new(p.X.Scale,p.X.Offset+dx.X,p.Y.Scale,p.Y.Offset+dx.Y)
+		end
+	end)
+	UIS.InputEnded:Connect(function(i)
+		if i.UserInputType==Enum.UserInputType.MouseButton1 then d=false end
+	end)
+end
+
+------------------------------------------------
+-- CHARACTER
+------------------------------------------------
+local char, hum, hrp
+local function setup(c)
+	char=c
+	hum=c:WaitForChild("Humanoid")
+	hrp=c:WaitForChild("HumanoidRootPart")
+end
+setup(player.Character or player.CharacterAdded:Wait())
+player.CharacterAdded:Connect(setup)
+
+------------------------------------------------
+-- LEFT PANEL (ALPHA HUB)
+------------------------------------------------
+local left = Instance.new("Frame",gui)
+left.Size = UDim2.new(0,240,0,400)
+left.Position = UDim2.new(0,20,0,120)
+left.BackgroundColor3 = C.PANEL
+corner(left,12)
+
+local lh = Instance.new("TextLabel",left)
+lh.Size = UDim2.new(1,0,0,40)
+lh.Text = "Alpha Hub"
+lh.Font = Enum.Font.GothamBold
+lh.TextSize = 18
+lh.TextColor3 = C.TEXT
+lh.BackgroundTransparency = 1
+drag(left,lh)
+
+local function btn(text,y,callback)
+	local b = Instance.new("TextButton",left)
+	b.Size = UDim2.new(1,-20,0,32)
+	b.Position = UDim2.new(0,10,0,y)
+	b.Text = text
+	b.Font = Enum.Font.Gotham
+	b.TextSize = 14
+	b.TextColor3 = C.TEXT
+	b.BackgroundColor3 = C.BUTTON
+	corner(b,8)
+	b.MouseButton1Click:Connect(callback)
+	return b
+end
+
+------------------------------------------------
+-- FLY (mittlere Geschwindigkeit)
+------------------------------------------------
+local flyEnabled = false
+local flySpeed = 60 -- mittlere Geschwindigkeit
+
+-- Fly Toggle
+btn("Fly",50,function()
+	flyEnabled = not flyEnabled
+end)
+
+-- Fly Bewegung
+RunService.RenderStepped:Connect(function()
+	if flyEnabled and hrp and hum then
+		local moveDir = Vector3.new()
+		if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camera.CFrame.LookVector end
+		if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camera.CFrame.LookVector end
+		if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camera.CFrame.RightVector end
+		if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camera.CFrame.RightVector end
+		if UIS:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0,1,0) end
+		if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0,1,0) end
+
+		if moveDir.Magnitude > 0 then
+			hrp.Velocity = moveDir.Unit * flySpeed
+		else
+			hrp.Velocity = Vector3.new(0,0,0)
+		end
+	end
+end)
+
+------------------------------------------------
+-- Rocket
+------------------------------------------------
+btn("Rocket",90,function()
+	if hrp then
+		hrp.Velocity = Vector3.new(0,180,0)
+	end
+end)
+
+------------------------------------------------
+-- Ragdoll (stärker)
+------------------------------------------------
+btn("Ragdoll",130,function()
+	if hum then
+		hum:ChangeState(Enum.HumanoidStateType.Physics)
+		task.wait(0.25) -- stärker als vorher
+		hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+	end
+end)
+
+------------------------------------------------
+-- ESP
+------------------------------------------------
+local espOn = false
+local espCache = {}
+
+local function addESP(plr)
+	if plr == player or espCache[plr] or not plr.Character then return end
+	local hrp2 = plr.Character:FindFirstChild("HumanoidRootPart")
+	if not hrp2 then return end
+
+	local hl = Instance.new("Highlight")
+	hl.FillColor = Color3.fromRGB(255,80,80)
+	hl.FillTransparency = 0.4
+	hl.OutlineColor = Color3.new(1,1,1)
+	hl.Adornee = plr.Character
+	hl.Parent = gui
+
+	local bill = Instance.new("BillboardGui")
+	bill.Size = UDim2.new(0,140,0,30)
+	bill.AlwaysOnTop = true
+	bill.Adornee = hrp2
+	bill.Parent = gui
+
+	local txt = Instance.new("TextLabel",bill)
+	txt.Size = UDim2.new(1,0,1,0)
+	txt.BackgroundTransparency = 1
+	txt.TextColor3 = Color3.new(1,1,1)
+	txt.TextStrokeTransparency = 0
+	txt.Font = Enum.Font.GothamBold
+	txt.TextScaled = true
+
+	espCache[plr] = {hl=hl, txt=txt, hrp=hrp2}
+end
+
+local function clearESP()
+	for _,v in pairs(espCache) do
+		v.hl:Destroy()
+		v.txt.Parent:Destroy()
+	end
+	espCache = {}
+end
+
+btn("ESP",170,function()
+	espOn = not espOn
+	if not espOn then clearESP() end
+end)
+
+------------------------------------------------
+-- Kick / Rejoin
+------------------------------------------------
+btn("Kick (Leave)",210,function()
+	player:Kick("Alpha Hub")
+end)
+
+btn("Rejoin PS",250,function()
+	TeleportService:Teleport(game.PlaceId, player)
+end)
+
+------------------------------------------------
+-- BOTTOM LEFT (ANTI LAG + ANTI FLASH)
+------------------------------------------------
+local bl = Instance.new("Frame",gui)
+bl.Size = UDim2.new(0,260,0,200)
+bl.Position = UDim2.new(0,20,1,-280)
+bl.BackgroundColor3 = C.PANEL
+corner(bl,12)
+
+local blh = Instance.new("TextLabel",bl)
+blh.Size = UDim2.new(1,0,0,36)
+blh.Text = "Performance"
+blh.Font = Enum.Font.GothamBold
+blh.TextSize = 18
+blh.TextColor3 = C.TEXT
+blh.BackgroundTransparency = 1
+drag(bl,blh)
+
+local function toggle(parent,text,y,callback)
+	local b = Instance.new("TextButton",parent)
+	b.Size = UDim2.new(1,-20,0,32)
+	b.Position = UDim2.new(0,10,0,y)
+	b.Text = text..": OFF"
+	b.Font = Enum.Font.Gotham
+	b.TextSize = 14
+	b.TextColor3 = C.TEXT
+	b.BackgroundColor3 = C.BUTTON
+	corner(b,8)
+	local on = false
+	b.MouseButton1Click:Connect(function()
+		on = not on
+		b.Text = text..": "..(on and "ON" or "OFF")
+		b.BackgroundColor3 = on and C.ON or C.BUTTON
+		callback(on)
+	end)
+	return b
+end
+
+-- Anti Lag
+toggle(bl,"Anti Lag",50,function(on)
+	if on then
+		Lighting.GlobalShadows=false
+		for _,v in pairs(workspace:GetDescendants()) do
+			if v:IsA("BasePart") then
+				v.Material=Enum.Material.Plastic
+				v.CastShadow=false
+			elseif v:IsA("Decal") or v:IsA("Texture") then
+				v.Transparency=1
+			elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
+				v.Enabled=false
+			end
+		end
+		for _,item in pairs(char:GetChildren()) do
+			if item:IsA("Accessory") or item:IsA("Shirt") or item:IsA("Pants") then
+				item:Destroy()
+			end
+		end
+	else
+		Lighting.GlobalShadows=true
+	end
+end)
+
+-- Anti Flash
+toggle(bl,"Anti Flash",90,function(on)
+	if on then
+		Lighting.Brightness = 2
+		Lighting.FogEnd = 1000
+	else
+		Lighting.Brightness = 1
+		Lighting.FogEnd = 100000
+	end
+end)
+
+------------------------------------------------
+-- RIGHT PANEL (STEAL TARGET)
+------------------------------------------------
+local right = Instance.new("Frame",gui)
+right.Size = UDim2.new(0,260,0,260)
+right.Position = UDim2.new(1,-280,0,150)
+right.BackgroundColor3 = C.PANEL
+corner(right,12)
+
+local rh = Instance.new("TextLabel",right)
+rh.Size = UDim2.new(1,0,0,40)
+rh.Text = "STEAL TARGET"
+rh.Font = Enum.Font.GothamBold
+rh.TextSize = 18
+rh.TextColor3 = C.TEXT
+rh.BackgroundTransparency = 1
+drag(right,rh)
+
+toggle(right,"High",50,function() end)
+toggle(right,"Near",90,function() end)
+
+------------------------------------------------
+-- BOTTOM BAR (FPS / PING) – größer
+------------------------------------------------
+local bar = Instance.new("Frame",gui)
+bar.Size = UDim2.new(0,600,0,60)
+bar.Position = UDim2.new(0.5,-300,1,-120)
+bar.BackgroundColor3 = C.PANEL
+corner(bar,12)
+
+local info = Instance.new("TextLabel",bar)
+info.Size = UDim2.new(1,0,1,0)
+info.Font = Enum.Font.GothamBold
+info.TextSize = 18
+info.TextColor3 = C.TEXT
+info.BackgroundTransparency = 1
+
+------------------------------------------------
+-- LOOP
+------------------------------------------------
+RunService.RenderStepped:Connect(function(dt)
+	-- FPS / Ping
+	local fps = math.floor(1/dt)
+	local ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+	info.Text = "Alpha Hub   |   FPS: "..fps.."   |   Ping: "..ping.." ms"
+
+	-- ESP
+	if espOn then
+		for _,p in ipairs(Players:GetPlayers()) do
+			addESP(p)
+			if espCache[p] and hrp then
+				local dist = (hrp.Position - espCache[p].hrp.Position).Magnitude
+				espCache[p].txt.Text = p.Name.." ["..math.floor(dist).."]"
+			end
+		end
+	end
+end)
