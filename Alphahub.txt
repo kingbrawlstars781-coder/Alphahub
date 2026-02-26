@@ -1,72 +1,100 @@
-------------------------------------------------
--- ALPHA HUB | FINAL v12 (Fly mittlere Geschwindigkeit)
-------------------------------------------------
-
--- SERVICES
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
-local TeleportService = game:GetService("TeleportService")
+local TS = game:GetService("TeleportService")
 local Stats = game:GetService("Stats")
 local Lighting = game:GetService("Lighting")
-local player = Players.LocalPlayer
-local camera = workspace.CurrentCamera
+local HttpService = game:GetService("HttpService")
 
+local player = Players.LocalPlayer
+local cam = workspace.CurrentCamera
 local gui = Instance.new("ScreenGui", player.PlayerGui)
 gui.Name = "AlphaHub"
 gui.ResetOnSpawn = false
 
-------------------------------------------------
--- COLORS
-------------------------------------------------
-local C = {
-	PANEL = Color3.fromRGB(30,30,38),
-	BUTTON = Color3.fromRGB(45,45,55),
-	ACCENT = Color3.fromRGB(120,140,255),
-	TEXT = Color3.fromRGB(235,235,235),
-	ON = Color3.fromRGB(90,200,120)
+-- Config
+local configStorage = player.PlayerGui:FindFirstChild("AlphaHubConfig") or Instance.new("StringValue")
+configStorage.Name = "AlphaHubConfig"
+configStorage.Parent = player.PlayerGui
+
+local Config = {
+    FlyEnabled = false,
+    FlySpeed = 60,
+    SpeedBypassEnabled = false,
+    SpeedValue = 29,           -- geändert auf 29
+    AntiLag = false,
+    AntiFlash = false,
+    NearAutoSteal = false,
+    HighSteal = false,
+    ESPEnabled = false
 }
 
-------------------------------------------------
--- UTILS
-------------------------------------------------
-local function corner(o,r)
-	Instance.new("UICorner",o).CornerRadius = UDim.new(0,r)
+local function loadConfig()
+    if configStorage.Value ~= "" then
+        local success, loaded = pcall(HttpService.JSONDecode, HttpService, configStorage.Value)
+        if success then
+            for k,v in pairs(loaded) do Config[k] = v end
+        end
+    end
 end
 
-local function drag(frame,handle)
-	local d,s,p
-	handle.InputBegan:Connect(function(i)
-		if i.UserInputType==Enum.UserInputType.MouseButton1 then
-			d=true s=i.Position p=frame.Position
-		end
-	end)
-	UIS.InputChanged:Connect(function(i)
-		if d and i.UserInputType==Enum.UserInputType.MouseMovement then
-			local dx=i.Position-s
-			frame.Position=UDim2.new(p.X.Scale,p.X.Offset+dx.X,p.Y.Scale,p.Y.Offset+dx.Y)
-		end
-	end)
-	UIS.InputEnded:Connect(function(i)
-		if i.UserInputType==Enum.UserInputType.MouseButton1 then d=false end
-	end)
+local function saveConfig()
+    configStorage.Value = HttpService:JSONEncode(Config)
 end
 
-------------------------------------------------
--- CHARACTER
-------------------------------------------------
+loadConfig()
+
+local function onConfigChange()
+    saveConfig()
+end
+
+-- COLORS (altes Schema)
+local C = {
+    PANEL = Color3.fromRGB(30,30,38),
+    BUTTON = Color3.fromRGB(45,45,55),
+    TEXT = Color3.fromRGB(235,235,235),
+    ON = Color3.fromRGB(90,200,120)
+}
+
+-- UTILS (einfach wie früher)
+local function corner(o,r) Instance.new("UICorner",o).CornerRadius = UDim.new(0,r) end
+
+local function drag(frame, handle)
+    local d,s,p
+    handle.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            d,s,p = true, i.Position, frame.Position
+        end
+    end)
+    UIS.InputChanged:Connect(function(i)
+        if d and i.UserInputType == Enum.UserInputType.MouseMovement then
+            local dx = i.Position - s
+            frame.Position = UDim2.new(p.X.Scale, p.X.Offset + dx.X, p.Y.Scale, p.Y.Offset + dx.Y)
+        end
+    end)
+    UIS.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then d = false end
+    end)
+end
+
+-- CHARACTER SETUP
 local char, hum, hrp
+local disableAnim = false
+
 local function setup(c)
-	char=c
-	hum=c:WaitForChild("Humanoid")
-	hrp=c:WaitForChild("HumanoidRootPart")
+    char = c
+    hum = c:WaitForChild("Humanoid")
+    hrp = c:WaitForChild("HumanoidRootPart")
+    if disableAnim then
+        for _,v in hum:GetPlayingAnimationTracks() do v:Stop() end
+        for _,v in c:GetDescendants() do if v:IsA("Animator") then v:Destroy() end end
+    end
 end
+
 setup(player.Character or player.CharacterAdded:Wait())
 player.CharacterAdded:Connect(setup)
 
-------------------------------------------------
--- LEFT PANEL (ALPHA HUB)
-------------------------------------------------
+-- LEFT PANEL (altes Layout)
 local left = Instance.new("Frame",gui)
 left.Size = UDim2.new(0,240,0,400)
 left.Position = UDim2.new(0,20,0,120)
@@ -83,131 +111,228 @@ lh.BackgroundTransparency = 1
 drag(left,lh)
 
 local function btn(text,y,callback)
-	local b = Instance.new("TextButton",left)
-	b.Size = UDim2.new(1,-20,0,32)
-	b.Position = UDim2.new(0,10,0,y)
-	b.Text = text
-	b.Font = Enum.Font.Gotham
-	b.TextSize = 14
-	b.TextColor3 = C.TEXT
-	b.BackgroundColor3 = C.BUTTON
-	corner(b,8)
-	b.MouseButton1Click:Connect(callback)
-	return b
+    local b = Instance.new("TextButton",left)
+    b.Size = UDim2.new(1,-20,0,32)
+    b.Position = UDim2.new(0,10,0,y)
+    b.Text = text
+    b.Font = Enum.Font.Gotham
+    b.TextSize = 14
+    b.TextColor3 = C.TEXT
+    b.BackgroundColor3 = C.BUTTON
+    corner(b,8)
+    b.MouseButton1Click:Connect(callback)
+    return b
 end
 
-------------------------------------------------
--- FLY (mittlere Geschwindigkeit)
-------------------------------------------------
-local flyEnabled = false
-local flySpeed = 60 -- mittlere Geschwindigkeit
-
--- Fly Toggle
+-- Fly
+local flyEnabled = Config.FlyEnabled
 btn("Fly",50,function()
-	flyEnabled = not flyEnabled
+    flyEnabled = not flyEnabled
+    Config.FlyEnabled = flyEnabled
+    onConfigChange()
 end)
 
--- Fly Bewegung
 RunService.RenderStepped:Connect(function()
-	if flyEnabled and hrp and hum then
-		local moveDir = Vector3.new()
-		if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camera.CFrame.LookVector end
-		if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camera.CFrame.LookVector end
-		if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camera.CFrame.RightVector end
-		if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camera.CFrame.RightVector end
-		if UIS:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0,1,0) end
-		if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0,1,0) end
-
-		if moveDir.Magnitude > 0 then
-			hrp.Velocity = moveDir.Unit * flySpeed
-		else
-			hrp.Velocity = Vector3.new(0,0,0)
-		end
-	end
+    if flyEnabled and hrp and hum then
+        local moveDir = Vector3.new()
+        if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir += cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir -= cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir -= cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir += cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then moveDir += Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir -= Vector3.new(0,1,0) end
+        if moveDir.Magnitude > 0 then
+            hrp.Velocity = moveDir.Unit * Config.FlySpeed
+        else
+            hrp.Velocity = Vector3.new(0,0,0)
+        end
+    end
 end)
 
-------------------------------------------------
--- Rocket
-------------------------------------------------
-btn("Rocket",90,function()
-	if hrp then
-		hrp.Velocity = Vector3.new(0,180,0)
-	end
-end)
+btn("Rocket",90,function() if hrp then hrp.Velocity = Vector3.new(0,180,0) end end)
 
-------------------------------------------------
--- Ragdoll (stärker)
-------------------------------------------------
-btn("Ragdoll",130,function()
-	if hum then
-		hum:ChangeState(Enum.HumanoidStateType.Physics)
-		task.wait(0.25) -- stärker als vorher
-		hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-	end
-end)
-
-------------------------------------------------
--- ESP
-------------------------------------------------
-local espOn = false
+-- ESP (alt + rot für Player)
+local espOn = Config.ESPEnabled
 local espCache = {}
+local processedTraps = {}
+local baseEspInstances = {}
 
+local function startPulse(highlight)
+    task.spawn(function()
+        while highlight and highlight.Parent do
+            for i = 0, 1, 0.08 do
+                if not highlight.Parent then break end
+                highlight.FillTransparency = 0.2 + (i * 0.6)
+                highlight.OutlineTransparency = i
+                task.wait(0.03)
+            end
+            for i = 1, 0, -0.08 do
+                if not highlight.Parent then break end
+                highlight.FillTransparency = 0.2 + (i * 0.6)
+                highlight.OutlineTransparency = i
+                task.wait(0.03)
+            end
+        end
+    end)
+end
+
+local function applyTrapESP(obj)
+    if processedTraps[obj] then return end
+    processedTraps[obj] = true
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "TrapESP_Highlight"
+    highlight.Adornee = obj
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.FillColor = Color3.fromRGB(255,0,0)
+    highlight.OutlineColor = Color3.fromRGB(255,255,255)
+    startPulse(highlight)
+    highlight.Parent = obj
+
+    local targetPart = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart", true)
+    if targetPart then
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "TrapESP_Label"
+        billboard.Adornee = targetPart
+        billboard.Size = UDim2.new(0,120,0,50)
+        billboard.StudsOffset = Vector3.new(0,3,0)
+        billboard.AlwaysOnTop = true
+        local label = Instance.new("TextLabel", billboard)
+        label.BackgroundTransparency = 1
+        label.Size = UDim2.new(1,0,1,0)
+        local isMine = obj.Name:lower():find("mine")
+        label.Text = isMine and "⚠️ MINE! ⚠️" or "⚠️ TRAP! ⚠️"
+        label.TextColor3 = Color3.fromRGB(255,30,30)
+        label.TextSize = 22
+        label.Font = Enum.Font.SourceSansBold
+        label.TextStrokeTransparency = 0
+        label.TextStrokeColor3 = Color3.new(0,0,0)
+        billboard.Parent = obj
+    end
+
+    obj.AncestryChanged:Connect(function(_, parent) if not parent then processedTraps[obj] = nil end end)
+end
+
+local function scan(obj)
+    if not espOn then return end
+    local name = obj.Name:lower()
+    if name:find("mine") or name:find("trap") then
+        task.wait(0.1)
+        if obj.Parent then applyTrapESP(obj) end
+    end
+end
+
+game.DescendantAdded:Connect(scan)
+for _, obj in game:GetDescendants() do scan(obj) end
+
+-- Player ESP rot
 local function addESP(plr)
-	if plr == player or espCache[plr] or not plr.Character then return end
-	local hrp2 = plr.Character:FindFirstChild("HumanoidRootPart")
-	if not hrp2 then return end
-
-	local hl = Instance.new("Highlight")
-	hl.FillColor = Color3.fromRGB(255,80,80)
-	hl.FillTransparency = 0.4
-	hl.OutlineColor = Color3.new(1,1,1)
-	hl.Adornee = plr.Character
-	hl.Parent = gui
-
-	local bill = Instance.new("BillboardGui")
-	bill.Size = UDim2.new(0,140,0,30)
-	bill.AlwaysOnTop = true
-	bill.Adornee = hrp2
-	bill.Parent = gui
-
-	local txt = Instance.new("TextLabel",bill)
-	txt.Size = UDim2.new(1,0,1,0)
-	txt.BackgroundTransparency = 1
-	txt.TextColor3 = Color3.new(1,1,1)
-	txt.TextStrokeTransparency = 0
-	txt.Font = Enum.Font.GothamBold
-	txt.TextScaled = true
-
-	espCache[plr] = {hl=hl, txt=txt, hrp=hrp2}
+    if plr == player or espCache[plr] or not plr.Character then return end
+    local hrp2 = plr.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp2 then return end
+    local hl = Instance.new("Highlight")
+    hl.FillColor = Color3.fromRGB(255,60,60)          -- rot
+    hl.FillTransparency = 0.4
+    hl.OutlineColor = Color3.new(1,1,1)
+    hl.Adornee = plr.Character
+    hl.Parent = gui
+    local bill = Instance.new("BillboardGui")
+    bill.Size = UDim2.new(0,140,0,30)
+    bill.AlwaysOnTop = true
+    bill.Adornee = hrp2
+    bill.Parent = gui
+    local txt = Instance.new("TextLabel",bill)
+    txt.Size = UDim2.new(1,0,1,0)
+    txt.BackgroundTransparency = 1
+    txt.TextColor3 = Color3.new(1,1,1)
+    txt.TextStrokeTransparency = 0
+    txt.Font = Enum.Font.GothamBold
+    txt.TextScaled = true
+    espCache[plr] = {hl=hl, txt=txt, hrp=hrp2}
 end
 
 local function clearESP()
-	for _,v in pairs(espCache) do
-		v.hl:Destroy()
-		v.txt.Parent:Destroy()
-	end
-	espCache = {}
+    for _,v in pairs(espCache) do v.hl:Destroy() v.txt.Parent:Destroy() end
+    espCache = {}
+    for obj,_ in pairs(processedTraps) do
+        for _, child in obj:GetChildren() do
+            if child.Name:find("TrapESP") then child:Destroy() end
+        end
+    end
+    processedTraps = {}
+    for _, bb in pairs(baseEspInstances) do pcall(bb.Destroy, bb) end
+    baseEspInstances = {}
 end
 
-btn("ESP",170,function()
-	espOn = not espOn
-	if not espOn then clearESP() end
+btn("ESP",130,function()
+    espOn = not espOn
+    Config.ESPEnabled = espOn
+    onConfigChange()
+    if espOn then
+        for _, plr in Players:GetPlayers() do addESP(plr) end
+    else
+        clearESP()
+    end
 end)
 
-------------------------------------------------
--- Kick / Rejoin
-------------------------------------------------
-btn("Kick (Leave)",210,function()
-	player:Kick("Alpha Hub")
+-- BASE TIMER ESP (klein)
+local plotsFolder = workspace:WaitForChild("Plots", 10)
+local function createBaseESP(plot, mainPart)
+    if baseEspInstances[plot] then baseEspInstances[plot]:Destroy() end
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "rznnqTimer"
+    billboard.Size = UDim2.new(0,70,0,26)
+    billboard.StudsOffset = Vector3.new(0,5,0)
+    billboard.AlwaysOnTop = true
+    billboard.MaxDistance = 1000
+    billboard.Adornee = mainPart
+    billboard.Parent = mainPart
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1,0,1,0)
+    label.BackgroundTransparency = 1
+    label.TextScaled = true
+    label.Font = Enum.Font.Arcade
+    label.TextColor3 = Color3.fromRGB(0,0,0)
+    label.TextStrokeTransparency = 0
+    label.TextStrokeColor3 = Color3.fromRGB(255,255,255)
+    label.Parent = billboard
+    baseEspInstances[plot] = billboard
+    return billboard
+end
+
+local function updateBaseESP()
+    if not espOn or not plotsFolder then return end
+    for _, plot in ipairs(plotsFolder:GetChildren()) do
+        local purchases = plot:FindFirstChild("Purchases")
+        local plotBlock = purchases and purchases:FindFirstChild("PlotBlock")
+        local mainPart = plotBlock and plotBlock:FindFirstChild("Main")
+        local billboard = baseEspInstances[plot]
+        local timeGui = mainPart and mainPart:FindFirstChild("BillboardGui")
+        local timeLabel = timeGui and timeGui:FindFirstChild("RemainingTime")
+        if timeLabel and timeLabel.Text ~= "" then
+            billboard = billboard or createBaseESP(plot, mainPart)
+            local lbl = billboard:FindFirstChild("TextLabel")
+            if lbl then lbl.Text = timeLabel.Text end
+        elseif billboard then
+            billboard:Destroy()
+            baseEspInstances[plot] = nil
+        end
+    end
+end
+
+RunService.Heartbeat:Connect(updateBaseESP)
+
+btn("Disable Animations",170,function()
+    disableAnim = true
+    if hum then
+        for _,v in hum:GetPlayingAnimationTracks() do v:Stop() end
+        for _,v in char:GetDescendants() do if v:IsA("Animator") then v:Destroy() end end
+    end
 end)
 
-btn("Rejoin PS",250,function()
-	TeleportService:Teleport(game.PlaceId, player)
-end)
+btn("Kick (Leave)",210,function() player:Kick("Alpha Hub") end)
+btn("Rejoin",250,function() TS:Teleport(game.PlaceId, player) end)
 
-------------------------------------------------
--- BOTTOM LEFT (ANTI LAG + ANTI FLASH)
-------------------------------------------------
+-- BOTTOM LEFT PERFORMANCE (alt)
 local bl = Instance.new("Frame",gui)
 bl.Size = UDim2.new(0,260,0,200)
 bl.Position = UDim2.new(0,20,1,-280)
@@ -224,65 +349,51 @@ blh.BackgroundTransparency = 1
 drag(bl,blh)
 
 local function toggle(parent,text,y,callback)
-	local b = Instance.new("TextButton",parent)
-	b.Size = UDim2.new(1,-20,0,32)
-	b.Position = UDim2.new(0,10,0,y)
-	b.Text = text..": OFF"
-	b.Font = Enum.Font.Gotham
-	b.TextSize = 14
-	b.TextColor3 = C.TEXT
-	b.BackgroundColor3 = C.BUTTON
-	corner(b,8)
-	local on = false
-	b.MouseButton1Click:Connect(function()
-		on = not on
-		b.Text = text..": "..(on and "ON" or "OFF")
-		b.BackgroundColor3 = on and C.ON or C.BUTTON
-		callback(on)
-	end)
-	return b
+    local b = Instance.new("TextButton",parent)
+    b.Size = UDim2.new(1,-20,0,32)
+    b.Position = UDim2.new(0,10,0,y)
+    b.Text = text..": OFF"
+    b.Font = Enum.Font.Gotham
+    b.TextSize = 14
+    b.TextColor3 = C.TEXT
+    b.BackgroundColor3 = C.BUTTON
+    corner(b,8)
+    
+    local on = false
+    b.MouseButton1Click:Connect(function()
+        on = not on
+        b.Text = text..": "..(on and "ON" or "OFF")
+        b.BackgroundColor3 = on and C.ON or C.BUTTON
+        callback(on)
+    end)
+    return b
 end
 
--- Anti Lag
 toggle(bl,"Anti Lag",50,function(on)
-	if on then
-		Lighting.GlobalShadows=false
-		for _,v in pairs(workspace:GetDescendants()) do
-			if v:IsA("BasePart") then
-				v.Material=Enum.Material.Plastic
-				v.CastShadow=false
-			elseif v:IsA("Decal") or v:IsA("Texture") then
-				v.Transparency=1
-			elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
-				v.Enabled=false
-			end
-		end
-		for _,item in pairs(char:GetChildren()) do
-			if item:IsA("Accessory") or item:IsA("Shirt") or item:IsA("Pants") then
-				item:Destroy()
-			end
-		end
-	else
-		Lighting.GlobalShadows=true
-	end
+    Config.AntiLag = on
+    onConfigChange()
+    if on then
+        Lighting.GlobalShadows = false
+        for _,v in workspace:GetDescendants() do
+            if v:IsA("BasePart") then v.Material = Enum.Material.Plastic v.CastShadow = false
+            elseif v:IsA("Decal") or v:IsA("Texture") then v.Transparency = 1
+            elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then v.Enabled = false end
+        end
+    else
+        Lighting.GlobalShadows = true
+    end
 end)
 
--- Anti Flash
 toggle(bl,"Anti Flash",90,function(on)
-	if on then
-		Lighting.Brightness = 2
-		Lighting.FogEnd = 1000
-	else
-		Lighting.Brightness = 1
-		Lighting.FogEnd = 100000
-	end
+    Config.AntiFlash = on
+    onConfigChange()
+    Lighting.Brightness = on and 2 or 1
+    Lighting.FogEnd = on and 1000 or 100000
 end)
 
-------------------------------------------------
--- RIGHT PANEL (STEAL TARGET)
-------------------------------------------------
+-- RIGHT PANEL STEAL TARGET (altes Layout)
 local right = Instance.new("Frame",gui)
-right.Size = UDim2.new(0,260,0,260)
+right.Size = UDim2.new(0,260,0,300)
 right.Position = UDim2.new(1,-280,0,150)
 right.BackgroundColor3 = C.PANEL
 corner(right,12)
@@ -296,12 +407,138 @@ rh.TextColor3 = C.TEXT
 rh.BackgroundTransparency = 1
 drag(right,rh)
 
-toggle(right,"High",50,function() end)
-toggle(right,"Near",90,function() end)
+toggle(right,"High",50,function(on)
+    Config.HighSteal = on
+    onConfigChange()
+end)
 
-------------------------------------------------
--- BOTTOM BAR (FPS / PING) – größer
-------------------------------------------------
+-- Near Auto-Steal (schnell)
+local autoStealEnabled = Config.NearAutoSteal
+local stealLoopCoroutine = nil
+local stealCooldown = 0.08
+local HOLD_DURATION = 0.01
+
+local function getHRP()
+    return char and char:FindFirstChild("HumanoidRootPart")
+end
+
+local function getPromptPart(prompt)
+    local p = prompt.Parent
+    if p:IsA("BasePart") then return p end
+    if p:IsA("Model") then return p.PrimaryPart or p:FindFirstChildWhichIsA("BasePart") end
+    if p:IsA("Attachment") then return p.Parent end
+    return p:FindFirstChildWhichIsA("BasePart", true)
+end
+
+local function findNearestStealPrompt(hrp)
+    local nearest, minDist = nil, math.huge
+    local plots = workspace:FindFirstChild("Plots")
+    if not plots then return nil end
+    
+    for _, desc in pairs(plots:GetDescendants()) do
+        if desc:IsA("ProximityPrompt") and desc.Enabled and desc.ActionText == "Steal" then
+            local part = getPromptPart(desc)
+            if part then
+                local dist = (hrp.Position - part.Position).Magnitude
+                if dist < minDist then
+                    minDist = dist
+                    nearest = desc
+                end
+            end
+        end
+    end
+    return nearest
+end
+
+local function triggerPrompt(prompt)
+    if not prompt or not prompt:IsDescendantOf(workspace) then return end
+    
+    prompt.MaxActivationDistance = 9e9
+    prompt.RequiresLineOfSight = false
+    prompt.ClickablePrompt = true
+    prompt.HoldDuration = HOLD_DURATION
+    
+    pcall(function()
+        prompt:InputHoldBegin()
+        task.wait(HOLD_DURATION + 0.015)
+        prompt:InputHoldEnd()
+    end)
+end
+
+local function stealLoop()
+    while autoStealEnabled do
+        local hrp = getHRP()
+        if hrp then
+            local prompt = findNearestStealPrompt(hrp)
+            if prompt then triggerPrompt(prompt) end
+        else
+            player.CharacterAdded:Wait()
+        end
+        task.wait(stealCooldown)
+    end
+end
+
+toggle(right,"Near",90,function(on)
+    autoStealEnabled = on
+    Config.NearAutoSteal = on
+    onConfigChange()
+    if on then
+        if stealLoopCoroutine then pcall(coroutine.close, stealLoopCoroutine) end
+        stealLoopCoroutine = coroutine.create(stealLoop)
+        coroutine.resume(stealLoopCoroutine)
+    else
+        stealLoopCoroutine = nil
+    end
+end)
+
+-- Speed Bypass auf 29
+local speedEnabled = Config.SpeedBypassEnabled
+local targetSpeed = Config.SpeedValue   -- 29
+local speedConnection
+
+local function enableSpeedBypass()
+    if speedConnection then speedConnection:Disconnect() end
+    speedConnection = RunService.Stepped:Connect(function()
+        if not speedEnabled then return end
+        local character = player.Character
+        if not character then return end
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if not humanoid then return end
+        if humanoid:GetState() == Enum.HumanoidStateType.Running then
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                local moveDirection = humanoid.MoveDirection
+                if moveDirection.Magnitude > 0 then
+                    rootPart.Velocity = Vector3.new(
+                        moveDirection.X * targetSpeed,
+                        rootPart.Velocity.Y,
+                        moveDirection.Z * targetSpeed
+                    )
+                end
+            end
+        end
+    end)
+end
+
+local function disableSpeedBypass()
+    if speedConnection then
+        speedConnection:Disconnect()
+        speedConnection = nil
+    end
+end
+
+toggle(right,"Speed",130,function(on)
+    speedEnabled = on
+    Config.SpeedBypassEnabled = on
+    onConfigChange()
+    if on then
+        enableSpeedBypass()
+    else
+        disableSpeedBypass()
+    end
+end)
+
+-- BOTTOM BAR FPS/PING
 local bar = Instance.new("Frame",gui)
 bar.Size = UDim2.new(0,600,0,60)
 bar.Position = UDim2.new(0.5,-300,1,-120)
@@ -315,23 +552,16 @@ info.TextSize = 18
 info.TextColor3 = C.TEXT
 info.BackgroundTransparency = 1
 
-------------------------------------------------
--- LOOP
-------------------------------------------------
 RunService.RenderStepped:Connect(function(dt)
-	-- FPS / Ping
-	local fps = math.floor(1/dt)
-	local ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
-	info.Text = "Alpha Hub   |   FPS: "..fps.."   |   Ping: "..ping.." ms"
-
-	-- ESP
-	if espOn then
-		for _,p in ipairs(Players:GetPlayers()) do
-			addESP(p)
-			if espCache[p] and hrp then
-				local dist = (hrp.Position - espCache[p].hrp.Position).Magnitude
-				espCache[p].txt.Text = p.Name.." ["..math.floor(dist).."]"
-			end
-		end
-	end
+    local fps = math.floor(1/dt)
+    local ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+    info.Text = "Alpha Hub | FPS: "..fps.." | Ping: "..ping.." ms"
 end)
+
+-- CLEANUP
+game:BindToClose(function()
+    saveConfig()
+    if speedConnection then speedConnection:Disconnect() end
+end)
+
+print("Alpha Hub – altes GUI-Design wiederhergestellt | Speed auf 29")
