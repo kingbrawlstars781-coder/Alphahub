@@ -1,0 +1,94 @@
+local Players = game:GetService("Players")
+local ContentProvider = game:GetService("ContentProvider")
+local ReplicatedFirst = game:GetService("ReplicatedFirst")
+
+-- Roblox Default Loading sofort entfernen
+pcall(function()
+    ReplicatedFirst:RemoveDefaultLoadingScreen()
+end)
+
+-- ScreenGui sofort erstellen (ohne schwarzen Frame!)
+local gui = Instance.new("ScreenGui")
+gui.Name = "n1gloader"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.Parent = game:GetService("CoreGui")
+
+-- Warte auf LocalPlayer & PlayerGui
+local player = Players.LocalPlayer
+repeat task.wait() until player
+
+local PlayerGui = player:WaitForChild("PlayerGui", 8)
+gui.Parent = PlayerGui  -- sofort in PlayerGui verschieben
+
+-- Nur kritische Assets preloaden (Images, Buttons, Sounds)
+local assets = {}
+for _, obj in PlayerGui:GetChildren() do
+    if obj:IsA("ImageLabel") or obj:IsA("ImageButton") or obj:IsA("Sound") then
+        table.insert(assets, obj)
+    end
+end
+
+local loaded = false
+task.spawn(function()
+    pcall(function()
+        if #assets > 0 then
+            ContentProvider:PreloadAsync(assets)
+        end
+        loaded = true
+    end)
+end)
+
+-- Pill-Bar (klein, oben mittig, halbtransparent)
+local pillBar = Instance.new("Frame")
+pillBar.AnchorPoint = Vector2.new(0.5, 0)
+pillBar.Position = UDim2.fromScale(0.5, 0.04)
+pillBar.Size = UDim2.fromScale(0.18, 0.08)
+pillBar.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+pillBar.BackgroundTransparency = 0.45   -- halb-durchsichtig
+pillBar.ZIndex = 1000
+pillBar.Parent = gui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(1, 0)
+corner.Parent = pillBar
+
+-- Sonicspeed Text
+local title = Instance.new("TextLabel")
+title.Size = UDim2.fromScale(0.92, 0.48)
+title.Position = UDim2.fromScale(0.5, 0.32)
+title.AnchorPoint = Vector2.new(0.5, 0.5)
+title.BackgroundTransparency = 1
+title.Text = "Sonicspeed"
+title.TextScaled = true
+title.Font = Enum.Font.GothamBold
+title.TextColor3 = Color3.fromRGB(160, 160, 160)
+title.ZIndex = 1001
+title.Parent = pillBar
+
+-- 9n9.9n9 Text darunter
+local subtitle = Instance.new("TextLabel")
+subtitle.Size = UDim2.fromScale(0.92, 0.38)
+subtitle.Position = UDim2.fromScale(0.5, 0.74)
+subtitle.AnchorPoint = Vector2.new(0.5, 0.5)
+subtitle.BackgroundTransparency = 1
+subtitle.Text = "9n9.9n9"
+subtitle.TextScaled = true
+subtitle.Font = Enum.Font.Gotham
+subtitle.TextColor3 = Color3.fromRGB(130, 130, 130)
+subtitle.ZIndex = 1001
+subtitle.Parent = pillBar
+
+-- ───────────────────────────────────────────────
+-- Schnellstmöglich entfernen (kein Schwarz mehr davor)
+-- ───────────────────────────────────────────────
+
+local start = tick()
+while not loaded and tick() - start < 1.5 do
+    task.wait()
+end
+
+task.wait(0.00)  -- minimaler Puffer
+
+-- Komplett aufräumen
+gui:Destroy()
